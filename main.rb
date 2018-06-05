@@ -10,11 +10,14 @@ class CalcParser < Parslet::Parser
     str('.') >> match('[0-9]').repeat
   }
   rule(:number) {
-    sign.maybe >> integer >> decimal.maybe >> space?
+    # 数値部分に対して :number でキャプチャする
+    (sign.maybe >> integer >> decimal.maybe).as(:number) >> space?
   }
 
-  rule(:term) { number.as(:left) >> (term_op.as(:op) >> number.as(:right)).repeat }
-  rule(:term_op) { match('[+-]') >> space? }
+  # 数値や演算子は各レベルでキャプチャしているので、ここでは左辺、右辺のキャプチャのみ
+  rule(:term) { number.as(:left) >> (term_op >> number.as(:right)).repeat }
+  # 演算子に対して :op でキャプチャする
+  rule(:term_op) { match('[+-]').as(:op) >> space? }
 
   rule(:space) { match('\s').repeat(1) }
   rule(:space?) { space.maybe }
@@ -23,4 +26,4 @@ class CalcParser < Parslet::Parser
 end
 
 p CalcParser.new.parse('1 + 2 - 3')
-# => [{:left=>"1 "@0}, {:op=>"+ "@2, :right=>"2 "@4}, {:op=>"- "@6, :right=>"3"@8}]
+# => [{:left=>{:number=>"1"@0}}, {:op=>"+"@2, :right=>{:number=>"2"@4}}, {:op=>"-"@6, :right=>{:number=>"3"@8}}]
