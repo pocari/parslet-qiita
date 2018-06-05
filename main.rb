@@ -25,5 +25,18 @@ class CalcParser < Parslet::Parser
   root(:term)
 end
 
-p CalcParser.new.parse('1 + 2 - 3')
+# 追加したTransformクラス
+class CalcTransform < Parslet::Transform
+  rule(number: simple(:x)) { x.to_f }
+end
+
+# まずパースする
+parsed = CalcParser.new.parse('1 + 2 - 3')
+# パース結果表示
+p parsed
 # => [{:left=>{:number=>"1"@0}}, {:op=>"+"@2, :right=>{:number=>"2"@4}}, {:op=>"-"@6, :right=>{:number=>"3"@8}}]
+
+# パース結果をtransformした結果を表示
+p CalcTransform.new.apply(parsed)
+# => [{:left=>1.0}, {:op=>"+"@2, :right=>2.0}, {:op=>"-"@6, :right=>3.0}]
+
