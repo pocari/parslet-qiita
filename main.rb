@@ -13,8 +13,9 @@ class NumParser < Parslet::Parser
     sign.maybe >> integer >> decimal.maybe
   }
 
+  rule(:space) { match('\s').repeat(1) }
+  rule(:space?) { space.maybe }
+
   root(:number)
 end
-
-p NumParser.new.parse('-1.23')
 
