@@ -9,6 +9,12 @@ class NumParser < Parslet::Parser
   rule(:decimal) {
     str('.') >> match('[0-9]').repeat
   }
+  rule(:number) {
+    sign.maybe >> integer >> decimal.maybe
+  }
+
+  root(:number)
 end
 
+p NumParser.new.parse('-1.23')
 
