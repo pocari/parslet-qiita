@@ -13,8 +13,10 @@ class CalcParser < Parslet::Parser
     (sign.maybe >> integer >> decimal.maybe).as(:number) >> space?
   }
 
-  rule(:exp) { (number.as(:left) >> (exp_op >> number.as(:right)).repeat).as(:exp) }
+  rule(:exp) { (term.as(:left) >> (exp_op >> term.as(:right)).repeat).as(:exp) }
+  rule(:term) { (number.as(:left) >> (term_op >> number.as(:right)).repeat).as(:term) }
   rule(:exp_op) { match('[+-]').as(:op) >> space? }
+  rule(:term_op) { match('[*/]').as(:op) >> space? }
 
   rule(:space) { match('\s').repeat(1) }
   rule(:space?) { space.maybe }
@@ -39,6 +41,10 @@ BinOpNode = Struct.new(:left, :op, :right) do
       l - r
     when '+'
       l + r
+    when '*'
+      l * r
+    when '/'
+      l / r
     else
       raise "予期しない演算子です. #{op}"
     end
@@ -63,16 +69,29 @@ class CalcTransform < Parslet::Transform
       tree
     end
   }
+  rule(term: subtree(:tree)) {
+    if tree.is_a?(Array)
+      # 配列ならBinOpNodeに変換
+      tree.inject do |left, op_right|
+        # 演算子と右辺を取り出し
+        op = op_right[:op]
+        right = op_right[:right]
+        BinOpNode.new(left, op, right)
+      end
+    else
+      # 配列でないならそのものを返す
+      tree
+    end
+  }
 end
 
-parsed = CalcParser.new.parse('1 - 2 + 3')
+parsed = CalcParser.new.parse('1 - 2 + 3 * 4')
 p parsed
-# => {:exp=>[{:left=>{:number=>"1"@0}}, {:op=>"-"@2, :right=>{:number=>"2"@4}}, {:op=>"+"@6, :right=>{:number=>"3"@8}}]}
-
+# => {:exp=>[{:left=>{:term=>{:left=>{:number=>"1"@0}}}}, {:op=>"-"@2, :right=>{:term=>{:left=>{:number=>"2"@4}}}}, {:op=>"+"@6, :right=>{:term=>[{:left=>{:number=>"3"@8}}, {:op=>"*"@10, :right=>{:number=>"4"@12}}]}}]}
 ast = CalcTransform.new.apply(parsed)
 p ast
-# => #<struct BinOpNode left=#<struct BinOpNode left=#<struct NumericNode value="1"@0>, op="-"@2, right=#<struct NumericNode value="2"@4>>, op="+"@6, right=#<struct NumericNode value="3"@8>>
+# => #<struct BinOpNode left=#<struct BinOpNode left=#<struct NumericNode value="1"@0>, op="-"@2, right=#<struct NumericNode value="2"@4>>, op="+"@6, right=#<struct BinOpNode left=#<struct NumericNode value="3"@8>, op="*"@10, right=#<struct NumericNode value="4"@12>>>
 
 p ast.eval
-# => 2.0
+# => 11.0
 
