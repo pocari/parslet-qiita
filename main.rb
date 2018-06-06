@@ -12,16 +12,21 @@ class CalcParser < Parslet::Parser
   rule(:number) {
     (sign.maybe >> integer >> decimal.maybe).as(:number) >> space?
   }
+  rule(:expression) {
+    infix_expression(
+      number,
+      [term_op, 10, :left],
+      [exp_op, 5, :left],
+    )
+  }
 
-  rule(:exp) { (term.as(:left) >> (exp_op >> term.as(:right)).repeat).as(:exp) }
-  rule(:term) { (number.as(:left) >> (term_op >> number.as(:right)).repeat).as(:term) }
-  rule(:exp_op) { match('[+-]').as(:op) >> space? }
-  rule(:term_op) { match('[*/]').as(:op) >> space? }
+  rule(:exp_op) { match('[+-]') >> space? }
+  rule(:term_op) { match('[*/]') >> space? }
 
   rule(:space) { match('\s').repeat(1) }
   rule(:space?) { space.maybe }
 
-  root(:exp)
+  root(:expression)
 end
 
 # 数値用クラス
@@ -53,45 +58,24 @@ end
 
 class CalcTransform < Parslet::Transform
   rule(number: simple(:x)) { NumericNode.new(x) }
-  # left: xxxの構造も xxxに変換する
   rule(left: simple(:x)) { x }
-  rule(exp: subtree(:tree)) {
-    if tree.is_a?(Array)
-      # 配列ならBinOpNodeに変換
-      tree.inject do |left, op_right|
-        # 演算子と右辺を取り出し
-        op = op_right[:op]
-        right = op_right[:right]
-        BinOpNode.new(left, op, right)
-      end
-    else
-      # 配列でないならそのものを返す
-      tree
-    end
-  }
-  rule(term: subtree(:tree)) {
-    if tree.is_a?(Array)
-      # 配列ならBinOpNodeに変換
-      tree.inject do |left, op_right|
-        # 演算子と右辺を取り出し
-        op = op_right[:op]
-        right = op_right[:right]
-        BinOpNode.new(left, op, right)
-      end
-    else
-      # 配列でないならそのものを返す
-      tree
-    end
+
+  rule(
+    l: simple(:l),
+    o: simple(:o),
+    r: simple(:r)
+  ) {
+    BinOpNode.new(l, o.to_s.strip, r)
   }
 end
 
-parsed = CalcParser.new.parse('1 - 2 + 3 * 4')
+parsed = CalcParser.new.parse('1 + 2 * 3 / 6 - 4')
 p parsed
-# => {:exp=>[{:left=>{:term=>{:left=>{:number=>"1"@0}}}}, {:op=>"-"@2, :right=>{:term=>{:left=>{:number=>"2"@4}}}}, {:op=>"+"@6, :right=>{:term=>[{:left=>{:number=>"3"@8}}, {:op=>"*"@10, :right=>{:number=>"4"@12}}]}}]}
+# => {:l=>{:l=>{:number=>"1"@0}, :o=>"+ "@2, :r=>{:l=>{:l=>{:number=>"2"@4}, :o=>"* "@6, :r=>{:number=>"3"@8}}, :o=>"/ "@10, :r=>{:number=>"6"@12}}}, :o=>"- "@14, :r=>{:number=>"4"@16}}
 ast = CalcTransform.new.apply(parsed)
 p ast
-# => #<struct BinOpNode left=#<struct BinOpNode left=#<struct NumericNode value="1"@0>, op="-"@2, right=#<struct NumericNode value="2"@4>>, op="+"@6, right=#<struct BinOpNode left=#<struct NumericNode value="3"@8>, op="*"@10, right=#<struct NumericNode value="4"@12>>>
+# => <struct BinOpNode left=#<struct BinOpNode left=#<struct NumericNode value="1"@0>, op="+", right=#<struct BinOpNode left=#<struct BinOpNode left=#<struct NumericNode value="2"@4>, op="*", right=#<struct NumericNode value="3"@8>>, op="/", right=#<struct NumericNode value="6"@12>>>, op="-", right=#<struct NumericNode value="4"@16>>
 
 p ast.eval
-# => 11.0
+# => -2.0
 
