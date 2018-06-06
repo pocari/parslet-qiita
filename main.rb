@@ -13,23 +13,43 @@ class CalcParser < Parslet::Parser
     (sign.maybe >> integer >> decimal.maybe).as(:number) >> space?
   }
 
-  rule(:term) { (number.as(:left) >> (term_op >> number.as(:right)).repeat).as(:term) }
-  rule(:term_op) { match('[+-]').as(:op) >> space? }
+  rule(:exp) { (number.as(:left) >> (exp_op >> number.as(:right)).repeat).as(:exp) }
+  rule(:exp_op) { match('[+-]').as(:op) >> space? }
 
   rule(:space) { match('\s').repeat(1) }
   rule(:space?) { space.maybe }
 
-  root(:term)
+  root(:exp)
+end
+
+# 数値用クラス
+NumericNode = Struct.new(:value) do
+  def eval
+    value.to_f
+  end
 end
 
 # 二項演算用クラス
-BinOpNode = Struct.new(:left, :op, :right)
+BinOpNode = Struct.new(:left, :op, :right) do
+  def eval
+    l = left.eval
+    r = right.eval
+    case op
+    when '-'
+      l - r
+    when '+'
+      l + r
+    else
+      raise "予期しない演算子です. #{op}"
+    end
+  end
+end
 
 class CalcTransform < Parslet::Transform
-  rule(number: simple(:x)) { x.to_f }
+  rule(number: simple(:x)) { NumericNode.new(x) }
   # left: xxxの構造も xxxに変換する
   rule(left: simple(:x)) { x }
-  rule(term: subtree(:tree)) {
+  rule(exp: subtree(:tree)) {
     if tree.is_a?(Array)
       # 配列ならBinOpNodeに変換
       tree.inject do |left, op_right|
@@ -45,9 +65,14 @@ class CalcTransform < Parslet::Transform
   }
 end
 
-parsed = CalcParser.new.parse('1 + 2 - 3')
+parsed = CalcParser.new.parse('1 - 2 + 3')
 p parsed
-# => {:term=>[{:left=>{:number=>"1"@0}}, {:op=>"+"@2, :right=>{:number=>"2"@4}}, {:op=>"-"@6, :right=>{:number=>"3"@8}}]}
+# => {:exp=>[{:left=>{:number=>"1"@0}}, {:op=>"-"@2, :right=>{:number=>"2"@4}}, {:op=>"+"@6, :right=>{:number=>"3"@8}}]}
 
-p CalcTransform.new.apply(parsed)
-# => #<struct BinOpNode left=#<struct BinOpNode left=1.0, op="+"@2, right=2.0>, op="-"@6, right=3.0>
+ast = CalcTransform.new.apply(parsed)
+p ast
+# => #<struct BinOpNode left=#<struct BinOpNode left=#<struct NumericNode value="1"@0>, op="-"@2, right=#<struct NumericNode value="2"@4>>, op="+"@6, right=#<struct NumericNode value="3"@8>>
+
+p ast.eval
+# => 2.0
+
