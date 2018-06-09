@@ -7,7 +7,7 @@ class CalcParser < Parslet::Parser
     match('[0-9]')
   }
   rule(:decimal) {
-    str('.') >> match('[0-9]').repeat
+    str('.') >> match('[0-9]').repeat(1)
   }
   rule(:number) {
     (sign.maybe >> integer >> decimal.maybe).as(:number) >> space?
